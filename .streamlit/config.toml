@@ -1,0 +1,10 @@
+[server]
+# 解决 WebSocket 连接问题
+enableWebsocketCompression = false
+
+# 解决端口健康检查问题
+port = 8501
+
+# 解决跨域问题
+enableCORS = false
+enableXsrfProtection = false
