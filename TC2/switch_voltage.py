@@ -66,38 +66,35 @@ def show():
         df['N-switch Average (V)'] = df['Match Key'].map(n_avg_map)
         df['P-switch Average (V)'] = df['Match Key'].map(p_avg_map)
 
-        # 全局样式：把所有下拉选项的红色背景改成浅蓝色
+        # 全局样式
         st.markdown("""
             <style>
-                /* 下拉框选中项（tag）的背景色 - 浅蓝色 */
                 span[data-baseweb="tag"] {
                     background-color: #e6f0ff !important;
                     border-color: #b3d4ff !important;
+                    color: #1f1f1f !important;
+                }
+                span[data-baseweb="tag"] span {
+                    color: #1f1f1f !important;
                 }
                 span[data-baseweb="tag"] svg {
                     fill: #4a8bbf !important;
                 }
-                /* 下拉框选项悬停背景 */
+                div[data-baseweb="select"] li {
+                    color: #1f1f1f !important;
+                }
+                div[data-baseweb="select"] div {
+                    color: #1f1f1f !important;
+                }
+                div[data-baseweb="select"] input {
+                    color: #1f1f1f !important;
+                }
                 div[data-baseweb="select"] li:hover {
                     background-color: #f0f5ff !important;
                 }
-                /* 下拉框选中项的高亮背景 */
                 div[data-baseweb="select"] li[aria-selected="true"] {
                     background-color: #e6f0ff !important;
                 }
-                /* 多选下拉框的选中项 */
-                div[data-baseweb="select"] [role="listbox"] div[data-highlighted="true"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* 单选下拉框的选中项 */
-                div[data-baseweb="select"] div[role="option"][aria-selected="true"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* 所有 select 相关的红色改成浅蓝色 */
-                .stMultiSelect [data-baseweb="tag"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* radio 按钮选中时的颜色 */
                 div[role="radiogroup"] input:checked {
                     accent-color: #4a8bbf !important;
                 }
@@ -105,11 +102,9 @@ def show():
         """, unsafe_allow_html=True)
 
         # ========== 联动筛选器 ==========
-        # 获取所有选项
         all_projects = sorted(df['Project Name'].dropna().unique().tolist())
         all_voltages = sorted(df['Voltage Condition'].dropna().unique().tolist())
 
-        # 初始化 session state 存储筛选状态
         if 'tc2_selected_projects' not in st.session_state:
             st.session_state.tc2_selected_projects = all_projects
         if 'tc2_selected_voltages' not in st.session_state:
@@ -118,7 +113,6 @@ def show():
         col_filter1, col_filter2 = st.columns(2)
 
         with col_filter1:
-            # 根据当前选择的电压条件，计算可用的项目选项
             if st.session_state.tc2_selected_voltages:
                 available_projects = df[df['Voltage Condition'].isin(st.session_state.tc2_selected_voltages)][
                     'Project Name'].dropna().unique().tolist()
@@ -135,7 +129,6 @@ def show():
             st.session_state.tc2_selected_projects = selected_projects
 
         with col_filter2:
-            # 根据当前选择的项目，计算可用的电压条件选项
             if st.session_state.tc2_selected_projects:
                 available_voltages = df[df['Project Name'].isin(st.session_state.tc2_selected_projects)][
                     'Voltage Condition'].dropna().unique().tolist()
@@ -166,14 +159,12 @@ def show():
         positive_values = filtered_df['Positive Voltage (V)'].dropna().tolist()
         negative_values = filtered_df['Negative Voltage (V)'].dropna().tolist()
 
-        # 计算平均值
         avg_positive = np.mean(positive_values) if positive_values else None
         avg_negative = np.mean(negative_values) if negative_values else None
 
         # ========== 创建图表 ==========
         fig = go.Figure()
 
-        # ----- 正电压：直方图 + KDE曲线 + 平均值竖线 -----
         if positive_values:
             fig.add_trace(go.Histogram(
                 x=positive_values,
@@ -213,7 +204,6 @@ def show():
                     annotation_font_color="#2E86AB"
                 )
 
-        # ----- 负电压：直方图 + KDE曲线 + 平均值竖线 -----
         if negative_values:
             fig.add_trace(go.Histogram(
                 x=negative_values,
@@ -253,7 +243,6 @@ def show():
                     annotation_font_color="#A23B72"
                 )
 
-        # 添加0V参考线
         fig.add_vline(x=0, line_width=1.5, line_dash="dash", line_color="gray", opacity=0.5)
 
         fig.update_layout(
@@ -334,63 +323,28 @@ def show():
             st.plotly_chart(fig, width='stretch')
 
         with right_col:
-            # 全局样式：下拉选项背景改成浅蓝色，字体保持深色
             st.markdown("""
                 <style>
-                    /* 下拉框选中项（tag）的背景色 - 浅蓝色，深色字体 */
-                    span[data-baseweb="tag"] {
-                        background-color: #e6f0ff !important;
-                        border-color: #b3d4ff !important;
+                    div[data-testid='column']:nth-child(2) {
+                        padding-left: 0px !important;
+                    }
+                    div[data-testid='column']:nth-child(2) h4 {
+                        font-size: 14px !important;
+                        font-weight: bold !important;
+                        margin-bottom: 10px !important;
+                    }
+                    div[data-testid='stDataFrame'] td {
+                        font-size: 11px !important;
+                    }
+                    div[data-testid='stDataFrame'] th {
+                        font-size: 11px !important;
+                    }
+                    div[data-baseweb="select"] * {
+                        font-size: 13px !important;
                         color: #1f1f1f !important;
                     }
-                    span[data-baseweb="tag"] span {
-                        color: #1f1f1f !important;
-                    }
-                    span[data-baseweb="tag"] svg {
-                        fill: #4a8bbf !important;
-                    }
-                    /* 下拉框选项字体颜色 - 深色 */
-                    div[data-baseweb="select"] li {
-                        color: #1f1f1f !important;
-                    }
-                    div[data-baseweb="select"] div {
-                        color: #1f1f1f !important;
-                    }
-                    /* 下拉框输入框文字颜色 */
-                    div[data-baseweb="select"] input {
-                        color: #1f1f1f !important;
-                    }
-                    /* 下拉框占位符文字颜色 */
-                    div[data-baseweb="select"] div[data-baseweb="select"] span {
-                        color: #666666 !important;
-                    }
-                    /* 下拉框选项悬停背景 */
-                    div[data-baseweb="select"] li:hover {
-                        background-color: #f0f5ff !important;
-                    }
-                    /* 下拉框选中项的高亮背景 */
-                    div[data-baseweb="select"] li[aria-selected="true"] {
-                        background-color: #e6f0ff !important;
-                    }
-                    /* 多选下拉框的选中项 */
-                    div[data-baseweb="select"] [role="listbox"] div[data-highlighted="true"] {
-                        background-color: #e6f0ff !important;
-                    }
-                    /* 单选下拉框的选中项 */
-                    div[data-baseweb="select"] div[role="option"][aria-selected="true"] {
-                        background-color: #e6f0ff !important;
-                    }
-                    /* 所有 select 相关的红色改成浅蓝色 */
-                    .stMultiSelect [data-baseweb="tag"] {
-                        background-color: #e6f0ff !important;
-                    }
-                    /* radio 按钮选中时的颜色 */
-                    div[role="radiogroup"] input:checked {
-                        accent-color: #4a8bbf !important;
-                    }
-                    /* select 下拉框的整个容器文字颜色 */
-                    .stMultiSelect [data-baseweb="select"] * {
-                        color: #1f1f1f !important;
+                    div[role="radiogroup"] label {
+                        font-size: 12px !important;
                     }
                 </style>
             """, unsafe_allow_html=True)
@@ -422,17 +376,40 @@ def show():
             point_labels = [f"{row['Frequency']} - {row['Voltage (V)']:.3f} V ({row['Type']})"
                             for _, row in sorted_df.iterrows()]
 
-            # 所有选项的索引（默认全选）
             all_indices = list(range(len(point_labels)))
 
-            # 多选下拉框（默认全选）
+            # 找出频次最高的电压点（默认选中）
+            if len(sorted_df) > 0:
+                max_freq_idx = sorted_df['Frequency'].idxmax()
+                # 找到该索引在 sorted_df 中的位置
+                default_indices = [i for i, idx in enumerate(sorted_df.index) if idx == max_freq_idx]
+            else:
+                default_indices = []
+
+            # Select All / Clear All 按钮
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("📌 Select All", key="tc2_select_all", use_container_width=True):
+                    st.session_state.tc2_selected_points = all_indices
+            with col_btn2:
+                if st.button("🗑 Clear All", key="tc2_clear_all", use_container_width=True):
+                    st.session_state.tc2_selected_points = []
+
+            # 初始化 session state
+            if 'tc2_selected_points' not in st.session_state:
+                st.session_state.tc2_selected_points = default_indices
+
+            # 多选下拉框
             selected_indices = st.multiselect(
                 "Select voltage points to display",
                 options=all_indices,
                 format_func=lambda i: point_labels[i],
-                default=all_indices,
+                default=st.session_state.tc2_selected_points,
                 placeholder="Select one or more voltage points..."
             )
+
+            # 更新 session state
+            st.session_state.tc2_selected_points = selected_indices
 
             st.markdown("---")
 
@@ -440,12 +417,10 @@ def show():
             if selected_indices:
                 selected_voltages_data = [sorted_df.iloc[idx] for idx in selected_indices]
 
-                # 收集所有选中电压点的文件详情
                 all_details_data = []
                 for selected_row in selected_voltages_data:
                     file_count = len(selected_row['Project Name'])
 
-                    # 添加分隔行
                     all_details_data.append({
                         'Project': f'--- {selected_row["Type"]} @ {selected_row["Voltage (V)"]:.3f} V (Freq: {selected_row["Frequency"]}) ---',
                         'File': '',
@@ -514,7 +489,7 @@ def show():
                     f"**{len(selected_indices)} voltage point(s) selected, {len(details_df) - len(selected_indices)} files shown**")
                 st.dataframe(details_df, width='stretch', height=500)
             else:
-                st.info("No voltage points selected. Please select at least one point above.")
+                st.info("No voltage points selected. Use the buttons above or dropdown to select points.")
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
