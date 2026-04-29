@@ -6,8 +6,74 @@ from scipy import stats
 import os
 
 
+# ========== 缓存：数据加载和处理 ==========
+@st.cache_data
+def load_processed_data(main_csv_path, summary_csv_path):
+    """加载并处理原始数据，缓存结果"""
+
+    # 读取主数据
+    df = pd.read_csv(main_csv_path, encoding='utf-8')
+    df.columns = df.columns.str.strip().str.replace('\ufeff', '')
+
+    # 读取分组汇总数据
+    n_median_map = {}
+    p_median_map = {}
+    n_avg_map = {}
+    p_avg_map = {}
+
+    if os.path.exists(summary_csv_path):
+        df_summary = pd.read_csv(summary_csv_path, encoding='utf-8')
+        df_summary.columns = df_summary.columns.str.strip().str.replace('\ufeff', '')
+        df_summary = df_summary.rename(columns={
+            '所属项目': 'Project Name',
+            '电压条件': 'Voltage Condition',
+            'N-switch中位数(V)': 'N-switch Median (V)',
+            'P-switch中位数(V)': 'P-switch Median (V)',
+            'N-switch均值(V)': 'N-switch Average (V)',
+            'P-switch均值(V)': 'P-switch Average (V)',
+        })
+        for _, row in df_summary.iterrows():
+            key = f"{row['Project Name']}|{row['Voltage Condition']}"
+            n_median_map[key] = row.get('N-switch Median (V)', 'N/A')
+            p_median_map[key] = row.get('P-switch Median (V)', 'N/A')
+            n_avg_map[key] = row.get('N-switch Average (V)', 'N/A')
+            p_avg_map[key] = row.get('P-switch Average (V)', 'N/A')
+
+    # 重命名主数据的列
+    df = df.rename(columns={
+        '所属项目': 'Project Name',
+        '电压条件': 'Voltage Condition',
+        '正切换电压(V)': 'Positive Voltage (V)',
+        '负切换电压(V)': 'Negative Voltage (V)',
+        '文件名': 'File Name',
+    })
+
+    # 添加中位数和均值的列
+    df['Match Key'] = df['Project Name'] + '|' + df['Voltage Condition']
+    df['N-switch Median (V)'] = df['Match Key'].map(n_median_map)
+    df['P-switch Median (V)'] = df['Match Key'].map(p_median_map)
+    df['N-switch Average (V)'] = df['Match Key'].map(n_avg_map)
+    df['P-switch Average (V)'] = df['Match Key'].map(p_avg_map)
+
+    # 删除临时列
+    df = df.drop(columns=['Match Key'])
+
+    return df
+
+
+# ========== 缓存：KDE 计算 ==========
+@st.cache_data
+def compute_kde_curve(values, n_points=100):
+    """计算 KDE 曲线，缓存结果"""
+    if len(values) < 2:
+        return None, None
+    kde = stats.gaussian_kde(values)
+    x = np.linspace(min(values), max(values), n_points)
+    y = kde(x)
+    return x, y
+
+
 def show():
-    # 读取 CSV
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
     main_csv_path = os.path.join(current_dir, "..", "data", "TC3-切换电压统计结果-v1-20260428-1.csv")
@@ -22,49 +88,8 @@ def show():
             st.info("Please update the CSV filenames in tc3_switch_voltage.py for TC3")
             return
 
-        # 读取主数据
-        df = pd.read_csv(main_csv_path, encoding='utf-8')
-        df.columns = df.columns.str.strip().str.replace('\ufeff', '')
-
-        # 读取分组汇总数据（包含中位数和均值）
-        n_median_map = {}
-        p_median_map = {}
-        n_avg_map = {}
-        p_avg_map = {}
-
-        if os.path.exists(summary_csv_path):
-            df_summary = pd.read_csv(summary_csv_path, encoding='utf-8')
-            df_summary.columns = df_summary.columns.str.strip().str.replace('\ufeff', '')
-            df_summary = df_summary.rename(columns={
-                '所属项目': 'Project Name',
-                '电压条件': 'Voltage Condition',
-                'N-switch中位数(V)': 'N-switch Median (V)',
-                'P-switch中位数(V)': 'P-switch Median (V)',
-                'N-switch均值(V)': 'N-switch Average (V)',
-                'P-switch均值(V)': 'P-switch Average (V)',
-            })
-            for _, row in df_summary.iterrows():
-                key = f"{row['Project Name']}|{row['Voltage Condition']}"
-                n_median_map[key] = row.get('N-switch Median (V)', 'N/A')
-                p_median_map[key] = row.get('P-switch Median (V)', 'N/A')
-                n_avg_map[key] = row.get('N-switch Average (V)', 'N/A')
-                p_avg_map[key] = row.get('P-switch Average (V)', 'N/A')
-
-        # 重命名主数据的列
-        df = df.rename(columns={
-            '所属项目': 'Project Name',
-            '电压条件': 'Voltage Condition',
-            '正切换电压(V)': 'Positive Voltage (V)',
-            '负切换电压(V)': 'Negative Voltage (V)',
-            '文件名': 'File Name',
-        })
-
-        # 添加中位数和均值的列
-        df['Match Key'] = df['Project Name'] + '|' + df['Voltage Condition']
-        df['N-switch Median (V)'] = df['Match Key'].map(n_median_map)
-        df['P-switch Median (V)'] = df['Match Key'].map(p_median_map)
-        df['N-switch Average (V)'] = df['Match Key'].map(n_avg_map)
-        df['P-switch Average (V)'] = df['Match Key'].map(p_avg_map)
+        # 加载处理后的数据（使用缓存）
+        df = load_processed_data(main_csv_path, summary_csv_path)
 
         # 全局样式
         st.markdown("""
@@ -157,16 +182,21 @@ def show():
             st.warning("No data available. Please adjust your filters.")
             return
 
-        # 提取原始数据用于拟合
+        # ========== 提取原始数据用于拟合 ==========
         positive_values = filtered_df['Positive Voltage (V)'].dropna().tolist()
         negative_values = filtered_df['Negative Voltage (V)'].dropna().tolist()
 
         avg_positive = np.mean(positive_values) if positive_values else None
         avg_negative = np.mean(negative_values) if negative_values else None
 
-        # 创建图表
+        # ========== 使用缓存的 KDE 计算（100个点）==========
+        pos_x, pos_y = compute_kde_curve(positive_values, n_points=100)
+        neg_x, neg_y = compute_kde_curve(negative_values, n_points=100)
+
+        # ========== 创建图表 ==========
         fig = go.Figure()
 
+        # 正电压：直方图 + KDE曲线
         if positive_values:
             fig.add_trace(go.Histogram(
                 x=positive_values,
@@ -174,18 +204,15 @@ def show():
                 marker_color='#2E86AB',
                 opacity=0.6,
                 histnorm='probability density',
-                nbinsx=30,
+                nbinsx=20,  # bin 从 30 改为 20
                 legendgroup='Positive',
                 showlegend=True
             ))
 
-            if len(positive_values) > 1:
-                kde_x = np.linspace(min(positive_values), max(positive_values), 200)
-                kde = stats.gaussian_kde(positive_values)
-                kde_y = kde(kde_x)
+            if pos_x is not None:
                 fig.add_trace(go.Scatter(
-                    x=kde_x,
-                    y=kde_y,
+                    x=pos_x,
+                    y=pos_y,
                     name='Positive Switch (KDE Fit)',
                     line=dict(color='#2E86AB', width=2.5),
                     legendgroup='Positive',
@@ -206,6 +233,7 @@ def show():
                     annotation_font_color="#2E86AB"
                 )
 
+        # 负电压：直方图 + KDE曲线
         if negative_values:
             fig.add_trace(go.Histogram(
                 x=negative_values,
@@ -213,18 +241,15 @@ def show():
                 marker_color='#A23B72',
                 opacity=0.6,
                 histnorm='probability density',
-                nbinsx=30,
+                nbinsx=20,  # bin 从 30 改为 20
                 legendgroup='Negative',
                 showlegend=True
             ))
 
-            if len(negative_values) > 1:
-                kde_x = np.linspace(min(negative_values), max(negative_values), 200)
-                kde = stats.gaussian_kde(negative_values)
-                kde_y = kde(kde_x)
+            if neg_x is not None:
                 fig.add_trace(go.Scatter(
-                    x=kde_x,
-                    y=kde_y,
+                    x=neg_x,
+                    y=neg_y,
                     name='Negative Switch (KDE Fit)',
                     line=dict(color='#A23B72', width=2.5),
                     legendgroup='Negative',
@@ -264,7 +289,7 @@ def show():
             yaxis=dict(gridcolor='lightgray', zeroline=True, zerolinewidth=1)
         )
 
-        # 统计摘要
+        # ========== 显示统计摘要 ==========
         st.markdown("---")
         st.markdown("""
             <style>
@@ -287,7 +312,7 @@ def show():
         with col4:
             st.metric("📊 Positive Count", f"{len(positive_values)}")
 
-        # 准备右侧电压点选项
+        # ========== 准备右侧电压点选项 ==========
         positive_stats = filtered_df.groupby('Positive Voltage (V)').agg({
             'Project Name': list,
             'File Name': list,
@@ -318,7 +343,7 @@ def show():
 
         plot_df = pd.concat([positive_stats, negative_stats], ignore_index=True)
 
-        # 左右布局
+        # ========== 左右布局 ==========
         left_col, right_col = st.columns([2, 1.5])
 
         with left_col:
