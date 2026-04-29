@@ -66,38 +66,35 @@ def show():
         df['N-switch Average (V)'] = df['Match Key'].map(n_avg_map)
         df['P-switch Average (V)'] = df['Match Key'].map(p_avg_map)
 
-        # 全局样式：把所有下拉选项的红色背景改成浅蓝色
+        # 全局样式
         st.markdown("""
             <style>
-                /* 下拉框选中项（tag）的背景色 - 浅蓝色 */
                 span[data-baseweb="tag"] {
                     background-color: #e6f0ff !important;
                     border-color: #b3d4ff !important;
+                    color: #1f1f1f !important;
+                }
+                span[data-baseweb="tag"] span {
+                    color: #1f1f1f !important;
                 }
                 span[data-baseweb="tag"] svg {
                     fill: #4a8bbf !important;
                 }
-                /* 下拉框选项悬停背景 */
+                div[data-baseweb="select"] li {
+                    color: #1f1f1f !important;
+                }
+                div[data-baseweb="select"] div {
+                    color: #1f1f1f !important;
+                }
+                div[data-baseweb="select"] input {
+                    color: #1f1f1f !important;
+                }
                 div[data-baseweb="select"] li:hover {
                     background-color: #f0f5ff !important;
                 }
-                /* 下拉框选中项的高亮背景 */
                 div[data-baseweb="select"] li[aria-selected="true"] {
                     background-color: #e6f0ff !important;
                 }
-                /* 多选下拉框的选中项 */
-                div[data-baseweb="select"] [role="listbox"] div[data-highlighted="true"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* 单选下拉框的选中项 */
-                div[data-baseweb="select"] div[role="option"][aria-selected="true"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* 所有 select 相关的红色改成浅蓝色 */
-                .stMultiSelect [data-baseweb="tag"] {
-                    background-color: #e6f0ff !important;
-                }
-                /* radio 按钮选中时的颜色 */
                 div[role="radiogroup"] input:checked {
                     accent-color: #4a8bbf !important;
                 }
@@ -350,11 +347,6 @@ def show():
                     }
                     div[role="radiogroup"] label {
                         font-size: 12px !important;
-                        color: #1f1f1f !important;
-                    }
-                    /* 下拉框占位符 */
-                    div[data-baseweb="select"] span[data-baseweb="select"] {
-                        color: #666666 !important;
                     }
                 </style>
             """, unsafe_allow_html=True)
@@ -385,14 +377,33 @@ def show():
 
             all_indices = list(range(len(point_labels)))
 
+            if len(sorted_df) > 0:
+                max_freq_idx = sorted_df['Frequency'].idxmax()
+                default_indices = [i for i, idx in enumerate(sorted_df.index) if idx == max_freq_idx]
+            else:
+                default_indices = []
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("📌 Select All", key="tc3_select_all", use_container_width=True):
+                    st.session_state.tc3_selected_points = all_indices
+            with col_btn2:
+                if st.button("🗑 Clear All", key="tc3_clear_all", use_container_width=True):
+                    st.session_state.tc3_selected_points = []
+
+            if 'tc3_selected_points' not in st.session_state:
+                st.session_state.tc3_selected_points = default_indices
+
             selected_indices = st.multiselect(
                 "Select voltage points to display",
                 options=all_indices,
                 format_func=lambda i: point_labels[i],
-                default=all_indices,
+                default=st.session_state.tc3_selected_points,
                 placeholder="Select one or more voltage points...",
                 key="tc3_point_multiselect"
             )
+
+            st.session_state.tc3_selected_points = selected_indices
 
             st.markdown("---")
 
@@ -471,7 +482,7 @@ def show():
                     f"**{len(selected_indices)} voltage point(s) selected, {len(details_df) - len(selected_indices)} files shown**")
                 st.dataframe(details_df, width='stretch', height=500)
             else:
-                st.info("No voltage points selected. Please select at least one point above.")
+                st.info("No voltage points selected. Use the buttons above or dropdown to select points.")
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
